@@ -27,19 +27,38 @@
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 1;
-      color: white;
       text-align: center;
+    }
+
+    .dynamic-text span {
+      opacity: 0;
+      color: rgba(255, 255, 255, 0); /* Start fully transparent */
+      transition: color 1s ease, opacity 1s ease;
+    }
+
+    .dynamic-text span.revealed {
+      color: rgba(255, 255, 255, 0.95); /* 90% white */
+      opacity: 0.9;
+    }
+
+    h1, h2 {
+      margin: 0;
     }
 
     h1 {
       font-size: 3rem;
-      margin: 0;
     }
 
     h2 {
       font-size: 1.5rem;
-      margin: 0;
       margin-top: 10px;
+      opacity: 0;
+      transition: opacity 1s ease;
+      color: white;
+    }
+
+    h2.visible {
+      opacity: 0.3;
     }
   </style>
 </head>
@@ -47,8 +66,8 @@
   <canvas id="bg"></canvas>
 
   <div class="text-content">
-    <h1>Andre Python</h1>
-    <h2>mapping our world</h2>
+    <h1 class="dynamic-text" id="title"></h1>
+    <h2 id="subtitle">mapping our world</h2>
   </div>
 
   <script>
@@ -60,7 +79,7 @@
     canvas.height = height;
 
     const particles = [];
-    const numParticles = 100;
+    const numParticles = 50;
 
     class Particle {
       constructor() {
@@ -125,6 +144,35 @@
     }
 
     animate();
+
+    // Dynamic text reveal logic
+    const titleText = "Andre Python";
+    const titleContainer = document.getElementById("title");
+    const subtitle = document.getElementById("subtitle");
+
+    const spans = [];
+    for (let char of titleText) {
+      const span = document.createElement("span");
+      span.textContent = char;
+      titleContainer.appendChild(span);
+      spans.push(span);
+    }
+
+    function revealLettersRandomly() {
+      const remaining = spans.filter(span => !span.classList.contains('revealed'));
+      if (remaining.length === 0) {
+        subtitle.classList.add("visible");
+        return;
+      }
+
+      const span = remaining[Math.floor(Math.random() * remaining.length)];
+      span.classList.add("revealed");
+
+      setTimeout(revealLettersRandomly, 1000 + Math.random() * 300);
+    }
+
+    // Start after short delay
+    setTimeout(revealLettersRandomly, 1000);
   </script>
 </body>
 </html>
