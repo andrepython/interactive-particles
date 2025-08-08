@@ -1,311 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Andre Python | Interactive World Map</title>
+<meta charset="UTF-8" />
+<title>Interactive Text Morphing - Andre Python</title>
 <style>
   html, body {
-    margin: 0;
-    padding: 0;
-    background: #111;
-    overflow: hidden;
+    margin: 0; padding: 0; overflow: hidden; background: #111;
+    display: flex; justify-content: center; align-items: center; height: 100vh;
+    font-family: 'Roboto', sans-serif;
   }
   canvas {
     display: block;
-    cursor: pointer;
+    background: #111;
   }
 </style>
 </head>
 <body>
 <canvas id="canvas"></canvas>
-<script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-let width = window.innerWidth;
-let height = window.innerHeight;
-canvas.width = width;
-canvas.height = height;
 
-// Load a simple world map silhouette image
-const worldMap = new Image();
-worldMap.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/BlankMap-World-Microstates.svg/1024px-BlankMap-World-Microstates.svg.png";
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const offCanvas = document.createElement('canvas');
+const offCtx = offCanvas.getContext('2d');
+
+const text = " Welcome";
+const fontSize = 120;
+offCanvas.width = 800;
+offCanvas.height = 200;
+
+offCtx.font = `bold ${fontSize}px 'Roboto', sans-serif`;
+offCtx.fillStyle = 'white';
+offCtx.textBaseline = 'middle';
+offCtx.textAlign = 'center';
+offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+
+const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
 
 const particles = [];
-const particleSize = 2;
-const spacing = 4;
-let targetPositions = [];
-let mapPositions = [];
+const PARTICLE_SIZE = 1;
+const GAP = 3;  // space between sampled pixels
 
-class Particle {
-  constructor(x, y) {
-    this.x = Math.random() * width;
-    this.y = Math.random() * height;
-    this.tx = x;
-    this.ty = y;
-    this.speed = 0.07;
-  }
-  update() {
-    this.x += (this.tx - this.x) * this.speed;
-    this.y += (this.ty - this.y) * this.speed;
-  }
-  draw() {
-    ctx.fillStyle = "#00ffff";
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, particleSize, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function getPositionsFromImage(img, text = null) {
-  const tempCanvas = document.createElement("canvas");
-  const tempCtx = tempCanvas.getContext("2d");
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  tempCtx.clearRect(0, 0, width, height);
-
-  if (text) {
-    tempCtx.font = "bold 160px Arial";
-    tempCtx.fillStyle = "#fff";
-    tempCtx.textAlign = "center";
-    tempCtx.textBaseline = "middle";
-    tempCtx.fillText(text, width / 2, height / 2);
-  } else {
-    const scale = Math.min(width / img.width, height / img.height) * 0.8;
-    const iw = img.width * scale;
-    const ih = img.height * scale;
-    tempCtx.drawImage(img, (width - iw) / 2, (height - ih) / 2, iw, ih);
-  }
-
-  const positions = [];
-  const imageData = tempCtx.getImageData(0, 0, width, height).data;
-  for (let y = 0; y < height; y += spacing) {
-    for (let x = 0; x < width; x += spacing) {
-      const index = (y * width + x) * 4;
-      if (imageData[index + 3] > 128) {
-        positions.push({x, y});
-      }
+// Extract pixel positions from text imageData
+for(let y = 0; y < offCanvas.height; y += GAP){
+  for(let x = 0; x < offCanvas.width; x += GAP){
+    const index = (y * offCanvas.width + x) * 4;
+    if(imageData.data[index + 3] > 128) { // alpha > 128 means pixel is visible
+      // Map x,y from offCanvas to main canvas center
+      const posX = x + (width - offCanvas.width) / 2;
+      const posY = y + (height - offCanvas.height) / 2;
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        tx: posX,
+        ty: posY,
+        vx: 0,
+        vy: 0
+      });
     }
   }
-  return positions;
 }
 
-function assignTargets(positions) {
-  particles.forEach((p, i) => {
-    if (positions[i]) {
-      p.tx = positions[i].x;
-      p.ty = positions[i].y;
-    }
-  });
-}
+let mouse = {x: null, y: null};
+canvas.addEventListener('mousemove', e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+canvas.addEventListener('mouseleave', e => {
+  mouse.x = null;
+  mouse.y = null;
+});
 
 function animate() {
   ctx.clearRect(0, 0, width, height);
+
   particles.forEach(p => {
-    p.update();
-    p.draw();
+    // Move particles toward target position
+    const dx = p.tx - p.x;
+    const dy = p.ty - p.y;
+    p.vx += dx * 0.1;
+    p.vy += dy * 0.1;
+
+    // Apply some friction
+    p.vx *= 0.75;
+    p.vy *= 0.75;
+
+    // Mouse repulsion
+    if(mouse.x !== null && mouse.y !== null){
+      const mx = p.x - mouse.x;
+      const my = p.y - mouse.y;
+      const dist = Math.sqrt(mx * mx + my * my);
+      const minDist = 80;
+      if(dist < minDist){
+        const angle = Math.atan2(my, mx);
+        const force = (minDist - dist) / minDist;
+        p.vx += Math.cos(angle) * force * 5;
+        p.vy += Math.sin(angle) * force * 5;
+      }
+    }
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    // Draw particle
+    ctx.beginPath();
+    ctx.fillStyle = '#00ffff';
+    ctx.arc(p.x, p.y, PARTICLE_SIZE, 0, Math.PI * 2);
+    ctx.fill();
   });
+
   requestAnimationFrame(animate);
 }
 
-worldMap.onload = () => {
-  mapPositions = getPositionsFromImage(worldMap);
-  mapPositions.forEach(pos => {
-    particles.push(new Particle(pos.x, pos.y));
-  });
-  assignTargets(mapPositions);
-  animate();
-};
-
-// On hover → Name, on leave → World map
-canvas.addEventListener("mouseenter", () => {
-  targetPositions = getPositionsFromImage(null, "Andre Python");
-  assignTargets(targetPositions);
-});
-canvas.addEventListener("mouseleave", () => {
-  assignTargets(mapPositions);
-});
-
-window.addEventListener("resize", () => location.reload());
+animate();
 </script>
 </body>
 </html>
-
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Andre Python | Mapping Our World</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background-color: #111;
-      overflow: hidden;
-      font-family: 'Roboto', sans-serif;
-    }
-
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 0;
-    }
-
-    .text-content {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 1;
-      text-align: center;
-    }
-
-    .dynamic-text span {
-      opacity: 0;
-      color: rgba(255, 255, 255, 0); /* Start fully transparent */
-      transition: color 1s ease, opacity 1s ease;
-    }
-
-    .dynamic-text span.revealed {
-      color: rgba(255, 255, 255, 0.95); /* 90% white */
-      opacity: 0.9;
-    }
-
-    h1, h2 {
-      margin: 0;
-    }
-
-    h1 {
-      font-size: 3rem;
-    }
-
-    h2 {
-      font-size: 1.5rem;
-      margin-top: 10px;
-      opacity: 0;
-      transition: opacity 1s ease;
-      color: white;
-    }
-
-    h2.visible {
-      opacity: 0.3;
-    }
-  </style>
-</head>
-<body>
-  <canvas id="bg"></canvas>
-
-  <div class="text-content">
-    <h1 class="dynamic-text" id="title"></h1>
-    <h2 id="subtitle">mapping our world</h2>
-  </div>
-
-  <script>
-    const canvas = document.getElementById('bg');
-    const ctx = canvas.getContext('2d');
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
-
-    const particles = [];
-    const numParticles = 50;
-
-    class Particle {
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 1;
-        this.vy = (Math.random() - 0.5) * 1;
-        this.radius = 1.5 + Math.random();
-      }
-
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
-
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
-      }
-
-      draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#00ffff';
-        ctx.fill();
-      }
-    }
-
-    function connectParticles() {
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(0,255,255,${1 - dist / 120})`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-          }
-        }
-      }
-    }
-
-    function animate() {
-      ctx.clearRect(0, 0, width, height);
-      particles.forEach(p => {
-        p.update();
-        p.draw();
-      });
-      connectParticles();
-      requestAnimationFrame(animate);
-    }
-
-    window.addEventListener('resize', () => {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    });
-
-    for (let i = 0; i < numParticles; i++) {
-      particles.push(new Particle());
-    }
-
-    animate();
-
-    // Dynamic text reveal logic
-    const titleText = "Andre Python";
-    const titleContainer = document.getElementById("title");
-    const subtitle = document.getElementById("subtitle");
-
-    const spans = [];
-    for (let char of titleText) {
-      const span = document.createElement("span");
-      span.textContent = char;
-      titleContainer.appendChild(span);
-      spans.push(span);
-    }
-
-    function revealLettersRandomly() {
-      const remaining = spans.filter(span => !span.classList.contains('revealed'));
-      if (remaining.length === 0) {
-        subtitle.classList.add("visible");
-        return;
-      }
-
-      const span = remaining[Math.floor(Math.random() * remaining.length)];
-      span.classList.add("revealed");
-
-      setTimeout(revealLettersRandomly, 1000 + Math.random() * 300);
-    }
-
-    // Start after short delay
-    setTimeout(revealLettersRandomly, 1000);
-  </script>
-</body>
-</html>
- -->
