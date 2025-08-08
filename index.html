@@ -2,16 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Interactive Text Morphing - Andre Python</title>
+<title>Andre Python - Smooth Morph & Explosion</title>
 <style>
   html, body {
-    margin: 0; padding: 0; overflow: hidden; background: #111;
+    margin: 0; padding: 0; overflow: hidden; background: #000;
     display: flex; justify-content: center; align-items: center; height: 100vh;
     font-family: 'Roboto', sans-serif;
   }
   canvas {
     display: block;
-    background: #111;
   }
 </style>
 </head>
@@ -35,96 +34,124 @@ window.addEventListener('resize', resize);
 const offCanvas = document.createElement('canvas');
 const offCtx = offCanvas.getContext('2d');
 
-const text = " Welcome";
 const fontSize = 120;
 offCanvas.width = 800;
 offCanvas.height = 200;
 
-offCtx.font = `bold ${fontSize}px 'Roboto', sans-serif`;
-offCtx.fillStyle = 'white';
-offCtx.textBaseline = 'middle';
-offCtx.textAlign = 'center';
-offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
-offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+function getTextData(text) {
+  offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+  offCtx.font = `bold ${fontSize}px 'Roboto', sans-serif`;
+  offCtx.fillStyle = 'white';
+  offCtx.textBaseline = 'middle';
+  offCtx.textAlign = 'center';
+  offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+  const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+  
+  const points = [];
+  for(let y = 0; y < offCanvas.height; y += 3){
+    for(let x = 0; x < offCanvas.width; x += 3){
+      const index = (y * offCanvas.width + x) * 4;
+      if(imageData.data[index + 3] > 128) {
+        const posX = x + (width - offCanvas.width) / 2;
+        const posY = y + (height - offCanvas.height) / 2;
+        points.push({ tx: posX, ty: posY });
+      }
+    }
+  }
+  return points;
+}
 
-const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+let words = ["Welcome", "Bienvenue"];
+let currentWordIndex = 0;
+let particles = [];
+let targetPoints = getTextData(words[currentWordIndex]);
 
-const particles = [];
-const PARTICLE_SIZE = 1;
-const GAP = 3;  // space between sampled pixels
+// Create particles
+for(let i = 0; i < targetPoints.length; i++){
+  particles.push({
+    x: Math.random() * width,
+    y: Math.random() * height,
+    tx: targetPoints[i].tx,
+    ty: targetPoints[i].ty,
+    vx: 0,
+    vy: 0
+  });
+}
 
-// Extract pixel positions from text imageData
-for(let y = 0; y < offCanvas.height; y += GAP){
-  for(let x = 0; x < offCanvas.width; x += GAP){
-    const index = (y * offCanvas.width + x) * 4;
-    if(imageData.data[index + 3] > 128) { // alpha > 128 means pixel is visible
-      // Map x,y from offCanvas to main canvas center
-      const posX = x + (width - offCanvas.width) / 2;
-      const posY = y + (height - offCanvas.height) / 2;
+// Color animation
+let colorPhase = 0;
+
+// Explosion effect
+function explodeParticles() {
+  particles.forEach(p => {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 2; // gentler explosion
+    p.vx = Math.cos(angle) * speed;
+    p.vy = Math.sin(angle) * speed;
+  });
+}
+
+function morphToNextWord() {
+  currentWordIndex = (currentWordIndex + 1) % words.length;
+  targetPoints = getTextData(words[currentWordIndex]);
+  
+  // Adjust particle count
+  if(targetPoints.length > particles.length){
+    for(let i = particles.length; i < targetPoints.length; i++){
       particles.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        tx: posX,
-        ty: posY,
+        tx: targetPoints[i].tx,
+        ty: targetPoints[i].ty,
         vx: 0,
         vy: 0
       });
     }
+  } else if(targetPoints.length < particles.length){
+    particles = particles.slice(0, targetPoints.length);
   }
+  
+  // Assign new target positions
+  particles.forEach((p, i) => {
+    p.tx = targetPoints[i].tx;
+    p.ty = targetPoints[i].ty;
+  });
 }
-
-let mouse = {x: null, y: null};
-canvas.addEventListener('mousemove', e => {
-  mouse.x = e.clientX;
-  mouse.y = e.clientY;
-});
-canvas.addEventListener('mouseleave', e => {
-  mouse.x = null;
-  mouse.y = null;
-});
 
 function animate() {
   ctx.clearRect(0, 0, width, height);
+  
+  // Slow color shift
+  colorPhase += 0.005; // smaller = slower
+  const lightness = 20 + Math.sin(colorPhase) * 20; // very dark to mid blue
+  const color = `hsl(200, 100%, ${lightness}%)`;
 
   particles.forEach(p => {
-    // Move particles toward target position
     const dx = p.tx - p.x;
     const dy = p.ty - p.y;
-    p.vx += dx * 0.1;
-    p.vy += dy * 0.1;
-
-    // Apply some friction
-    p.vx *= 0.75;
-    p.vy *= 0.75;
-
-    // Mouse repulsion
-    if(mouse.x !== null && mouse.y !== null){
-      const mx = p.x - mouse.x;
-      const my = p.y - mouse.y;
-      const dist = Math.sqrt(mx * mx + my * my);
-      const minDist = 80;
-      if(dist < minDist){
-        const angle = Math.atan2(my, mx);
-        const force = (minDist - dist) / minDist;
-        p.vx += Math.cos(angle) * force * 5;
-        p.vy += Math.sin(angle) * force * 5;
-      }
-    }
-
+    p.vx += dx * 0.05; // smaller = slower morph
+    p.vy += dy * 0.05;
+    p.vx *= 0.8; // friction
+    p.vy *= 0.8;
     p.x += p.vx;
     p.y += p.vy;
 
-    // Draw particle
     ctx.beginPath();
-    ctx.fillStyle = '#00ffff';
-    ctx.arc(p.x, p.y, PARTICLE_SIZE, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
     ctx.fill();
   });
-
+  
   requestAnimationFrame(animate);
 }
 
 animate();
+
+// Timeline: explosion -> morph
+setInterval(() => {
+  explodeParticles();
+  setTimeout(morphToNextWord, 800); // morph after explosion
+}, 5000); // delay between word switches
 </script>
 </body>
 </html>
