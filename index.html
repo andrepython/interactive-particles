@@ -1,6 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta charset="UTF-8">
+<title>Andre Python | Interactive World Map</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #111;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let width = window.innerWidth;
+let height = window.innerHeight;
+canvas.width = width;
+canvas.height = height;
+
+// Load a simple world map silhouette image
+const worldMap = new Image();
+worldMap.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/BlankMap-World-Microstates.svg/1024px-BlankMap-World-Microstates.svg.png";
+
+const particles = [];
+const particleSize = 2;
+const spacing = 4;
+let targetPositions = [];
+let mapPositions = [];
+
+class Particle {
+  constructor(x, y) {
+    this.x = Math.random() * width;
+    this.y = Math.random() * height;
+    this.tx = x;
+    this.ty = y;
+    this.speed = 0.07;
+  }
+  update() {
+    this.x += (this.tx - this.x) * this.speed;
+    this.y += (this.ty - this.y) * this.speed;
+  }
+  draw() {
+    ctx.fillStyle = "#00ffff";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, particleSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function getPositionsFromImage(img, text = null) {
+  const tempCanvas = document.createElement("canvas");
+  const tempCtx = tempCanvas.getContext("2d");
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  tempCtx.clearRect(0, 0, width, height);
+
+  if (text) {
+    tempCtx.font = "bold 160px Arial";
+    tempCtx.fillStyle = "#fff";
+    tempCtx.textAlign = "center";
+    tempCtx.textBaseline = "middle";
+    tempCtx.fillText(text, width / 2, height / 2);
+  } else {
+    const scale = Math.min(width / img.width, height / img.height) * 0.8;
+    const iw = img.width * scale;
+    const ih = img.height * scale;
+    tempCtx.drawImage(img, (width - iw) / 2, (height - ih) / 2, iw, ih);
+  }
+
+  const positions = [];
+  const imageData = tempCtx.getImageData(0, 0, width, height).data;
+  for (let y = 0; y < height; y += spacing) {
+    for (let x = 0; x < width; x += spacing) {
+      const index = (y * width + x) * 4;
+      if (imageData[index + 3] > 128) {
+        positions.push({x, y});
+      }
+    }
+  }
+  return positions;
+}
+
+function assignTargets(positions) {
+  particles.forEach((p, i) => {
+    if (positions[i]) {
+      p.tx = positions[i].x;
+      p.ty = positions[i].y;
+    }
+  });
+}
+
+function animate() {
+  ctx.clearRect(0, 0, width, height);
+  particles.forEach(p => {
+    p.update();
+    p.draw();
+  });
+  requestAnimationFrame(animate);
+}
+
+worldMap.onload = () => {
+  mapPositions = getPositionsFromImage(worldMap);
+  mapPositions.forEach(pos => {
+    particles.push(new Particle(pos.x, pos.y));
+  });
+  assignTargets(mapPositions);
+  animate();
+};
+
+// On hover → Name, on leave → World map
+canvas.addEventListener("mouseenter", () => {
+  targetPositions = getPositionsFromImage(null, "Andre Python");
+  assignTargets(targetPositions);
+});
+canvas.addEventListener("mouseleave", () => {
+  assignTargets(mapPositions);
+});
+
+window.addEventListener("resize", () => location.reload());
+</script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
   <meta charset="UTF-8" />
   <title>Andre Python | Mapping Our World</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
@@ -176,3 +308,4 @@
   </script>
 </body>
 </html>
+ -->
