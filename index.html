@@ -2,12 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Andre Python - Smooth Morph & Explosion</title>
+<title>Text Morphing Explosion - Andre Python</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&display=swap');
   html, body {
-    margin: 0; padding: 0; overflow: hidden; background: rgba(0, 0, 0, 0.7);
-    display: flex; justify-content: center; align-items: center; height: 100vh;
-    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #202124; /* Google dark theme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Roboto Mono', monospace;
   }
   canvas {
     display: block;
@@ -34,124 +41,101 @@ window.addEventListener('resize', resize);
 const offCanvas = document.createElement('canvas');
 const offCtx = offCanvas.getContext('2d');
 
-const fontSize = 120;
-offCanvas.width = 800;
-offCanvas.height = 200;
+// Three words now
+const words = ["Welcome", "Bienvenue", "欢迎"];
+let currentWordIndex = 0;
 
-function getTextData(text) {
+offCanvas.width = 1000;
+offCanvas.height = 1000;
+
+function getImageDataFromText(text) {
+  // Adjust font size for Chinese so it looks balanced
+  let fontSize = (text === "欢迎") ? 240 : 180;
   offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
-  offCtx.font = `bold ${fontSize}px 'Roboto', sans-serif`;
+  offCtx.font = `bold ${fontSize}px 'Roboto Mono', monospace`;
   offCtx.fillStyle = 'white';
   offCtx.textBaseline = 'middle';
   offCtx.textAlign = 'center';
   offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
-  const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
-  
-  const points = [];
-  for(let y = 0; y < offCanvas.height; y += 3){
-    for(let x = 0; x < offCanvas.width; x += 3){
+  return offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+}
+
+const PARTICLE_SIZE = 3.5;
+const GAP = 7;
+let particles = [];
+
+function createParticlesFromText(text) {
+  const imageData = getImageDataFromText(text);
+  const newParticles = [];
+  for (let y = 0; y < offCanvas.height; y += GAP) {
+    for (let x = 0; x < offCanvas.width; x += GAP) {
       const index = (y * offCanvas.width + x) * 4;
-      if(imageData.data[index + 3] > 128) {
+      if (imageData.data[index + 3] > 128) {
         const posX = x + (width - offCanvas.width) / 2;
         const posY = y + (height - offCanvas.height) / 2;
-        points.push({ tx: posX, ty: posY });
+        newParticles.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          tx: posX,
+          ty: posY,
+          vx: 0,
+          vy: 0,
+          colorLightness: Math.random() * 50 + 30
+        });
       }
     }
   }
-  return points;
+  particles = newParticles;
 }
 
-let words = ["Welcome", "Bienvenue"];
-let currentWordIndex = 0;
-let particles = [];
-let targetPoints = getTextData(words[currentWordIndex]);
-
-// Create particles
-for(let i = 0; i < targetPoints.length; i++){
-  particles.push({
-    x: Math.random() * width,
-    y: Math.random() * height,
-    tx: targetPoints[i].tx,
-    ty: targetPoints[i].ty,
-    vx: 0,
-    vy: 0
-  });
-}
-
-// Color animation
-let colorPhase = 0;
-
-// Explosion effect
-function explodeParticles() {
-  particles.forEach(p => {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 2 + Math.random() * 2; // gentler explosion
-    p.vx = Math.cos(angle) * speed;
-    p.vy = Math.sin(angle) * speed;
-  });
-}
+createParticlesFromText(words[currentWordIndex]);
 
 function morphToNextWord() {
-  currentWordIndex = (currentWordIndex + 1) % words.length;
-  targetPoints = getTextData(words[currentWordIndex]);
-  
-  // Adjust particle count
-  if(targetPoints.length > particles.length){
-    for(let i = particles.length; i < targetPoints.length; i++){
-      particles.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        tx: targetPoints[i].tx,
-        ty: targetPoints[i].ty,
-        vx: 0,
-        vy: 0
-      });
-    }
-  } else if(targetPoints.length < particles.length){
-    particles = particles.slice(0, targetPoints.length);
-  }
-  
-  // Assign new target positions
-  particles.forEach((p, i) => {
-    p.tx = targetPoints[i].tx;
-    p.ty = targetPoints[i].ty;
+  // Explosion effect
+  particles.forEach(p => {
+    p.vx = (Math.random() - 0.5) * 10;
+    p.vy = (Math.random() - 0.5) * 10;
   });
+
+  setTimeout(() => {
+    currentWordIndex = (currentWordIndex + 1) % words.length;
+    createParticlesFromText(words[currentWordIndex]);
+  }, 5000); // explosion pause longer
 }
 
 function animate() {
-  ctx.clearRect(0, 0, width, height);
-  
-  // Slow color shift
-  colorPhase += 0.005; // smaller = slower
-  const lightness = 20 + Math.sin(colorPhase) * 20; // very dark to mid blue
-  const color = `hsl(200, 100%, ${lightness}%)`;
+  // Ghost trail effect
+  ctx.fillStyle = 'rgba(32, 33, 36, 0.2)'; 
+  ctx.fillRect(0, 0, width, height);
 
   particles.forEach(p => {
+    // Slow morph after explosion
     const dx = p.tx - p.x;
     const dy = p.ty - p.y;
-    p.vx += dx * 0.05; // smaller = slower morph
-    p.vy += dy * 0.05;
-    p.vx *= 0.8; // friction
-    p.vy *= 0.8;
+    p.vx += dx * 0.007; // slower approach
+    p.vy += dy * 0.007;
+
+    p.vx *= 0.75;
+    p.vy *= 0.75;
+
     p.x += p.vx;
     p.y += p.vy;
 
+    // Blue hue shift (light to dark)
+    p.colorLightness += 0.15; // slower shift
+    if (p.colorLightness > 100) p.colorLightness = 30;
+    ctx.fillStyle = `hsl(200, 100%, ${p.colorLightness}%)`;
+
     ctx.beginPath();
-    ctx.fillStyle = color;
-    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, PARTICLE_SIZE, 0, Math.PI * 3);
     ctx.fill();
   });
-  
+
   requestAnimationFrame(animate);
 }
 
 animate();
-
-// Timeline: explosion -> morph
-setInterval(() => {
-  explodeParticles();
-  setTimeout(morphToNextWord, 800); // morph after explosion
-}, 5000); // delay between word switches
+setInterval(morphToNextWord, 7000); // slower word changes
 </script>
 </body>
 </html>
